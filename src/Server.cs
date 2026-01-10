@@ -30,6 +30,13 @@ while (true)
     {
         response = "HTTP/1.1 200 OK\r\n\r\n";
     }
+    else if (path.StartsWith("/echo/"))
+    {
+        string echoStr = path.Substring(6);
+        int contentLength = Encoding.UTF8.GetByteCount(echoStr);
+        
+        response = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {contentLength}\r\n\r\n{echoStr}";
+    }
     else
     {
         response = "HTTP/1.1 404 Not Found\r\n\r\n";
