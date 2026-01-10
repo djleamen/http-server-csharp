@@ -37,6 +37,21 @@ while (true)
         
         response = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {contentLength}\r\n\r\n{echoStr}";
     }
+    else if (path == "/user-agent")
+    {
+        string userAgent = "";
+        foreach (string line in lines)
+        {
+            if (line.StartsWith("User-Agent:", StringComparison.OrdinalIgnoreCase))
+            {
+                userAgent = line.Substring("User-Agent:".Length).Trim();
+                break;
+            }
+        }
+        
+        int contentLength = Encoding.UTF8.GetByteCount(userAgent);
+        response = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {contentLength}\r\n\r\n{userAgent}";
+    }
     else
     {
         response = "HTTP/1.1 404 Not Found\r\n\r\n";
