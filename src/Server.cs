@@ -16,10 +16,25 @@ while (true)
     
     // Read the request
     byte[] buffer = new byte[1024];
-    client.Receive(buffer);
+    int bytesRead = client.Receive(buffer);
+    string request = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+    
+    // Parse the request
+    string[] lines = request.Split("\r\n");
+    string[] requestLine = lines[0].Split(' ');
+    string path = requestLine[1];
     
     // Send the HTTP response
-    string response = "HTTP/1.1 200 OK\r\n\r\n";
+    string response;
+    if (path == "/")
+    {
+        response = "HTTP/1.1 200 OK\r\n\r\n";
+    }
+    else
+    {
+        response = "HTTP/1.1 404 Not Found\r\n\r\n";
+    }
+    
     byte[] responseBytes = Encoding.UTF8.GetBytes(response);
     client.Send(responseBytes);
     
