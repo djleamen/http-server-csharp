@@ -7,6 +7,17 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
+// Parse command line arguments
+string? directory = null;
+for (int i = 0; i < args.Length; i++)
+{
+    if (args[i] == "--directory" && i + 1 < args.Length)
+    {
+        directory = args[i + 1];
+        break;
+    }
+}
+
 TcpListener server = new TcpListener(IPAddress.Any, 4221);
 server.Start();
 
@@ -14,10 +25,10 @@ while (true)
 {
     Socket client = server.AcceptSocket();
     
-    _ = Task.Run(() => HandleClient(client));
+    _ = Task.Run(() => HandleClient(client, directory));
 }
 
-void HandleClient(Socket client)
+void HandleClient(Socket client, string? directory)
 {
     // Read the request
     byte[] buffer = new byte[1024];
@@ -56,6 +67,34 @@ void HandleClient(Socket client)
         
         int contentLength = Encoding.UTF8.GetByteCount(userAgent);
         response = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {contentLength}\r\n\r\n{userAgent}";
+    }
+    else if (path.StartsWith("/files/"))
+    {
+        string filename = path.Substring(7);
+        
+        if (directory != null)
+        {
+            string filePath = Path.Combine(directory, filename);
+            
+            if (File.Exists(filePath))
+            {
+                byte[] fileContent = File.ReadAllBytes(filePath);
+                int contentLength = fileContent.Length;
+                
+                string headers = $"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {contentLength}\r\n\r\n";
+                byte[] headerBytes = Encoding.UTF8.GetBytes(headers);
+                
+                byte[] fullResponse = new byte[headerBytes.Length + fileContent.Length];
+                Buffer.BlockCopy(headerBytes, 0, fullResponse, 0, headerBytes.Length);
+                Buffer.BlockCopy(fileContent, 0, fullResponse, headerBytes.Length, fileContent.Length);
+                
+                client.Send(fullResponse);
+                client.Close();
+                return;
+            }
+        }
+        
+        response = "HTTP/1.1 404 Not Found\r\n\r\n";
     }
     else
     {
