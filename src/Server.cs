@@ -41,6 +41,16 @@ void HandleClient(Socket client, string? directory)
     string method = requestLine[0];
     string path = requestLine[1];
     
+    string acceptEncoding = "";
+    foreach (string line in lines)
+    {
+        if (line.StartsWith("Accept-Encoding:", StringComparison.OrdinalIgnoreCase))
+        {
+            acceptEncoding = line.Substring("Accept-Encoding:".Length).Trim();
+            break;
+        }
+    }
+    
     // Send the HTTP response
     string response;
     if (path == "/")
@@ -52,7 +62,16 @@ void HandleClient(Socket client, string? directory)
         string echoStr = path.Substring(6);
         int contentLength = Encoding.UTF8.GetByteCount(echoStr);
         
-        response = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {contentLength}\r\n\r\n{echoStr}";
+        bool supportsGzip = acceptEncoding.Contains("gzip", StringComparison.OrdinalIgnoreCase);
+        
+        if (supportsGzip)
+        {
+            response = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: {contentLength}\r\n\r\n{echoStr}";
+        }
+        else
+        {
+            response = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {contentLength}\r\n\r\n{echoStr}";
+        }
     }
     else if (path == "/user-agent")
     {
