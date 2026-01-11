@@ -38,6 +38,7 @@ void HandleClient(Socket client, string? directory)
     // Parse the request
     string[] lines = request.Split("\r\n");
     string[] requestLine = lines[0].Split(' ');
+    string method = requestLine[0];
     string path = requestLine[1];
     
     // Send the HTTP response
@@ -76,7 +77,28 @@ void HandleClient(Socket client, string? directory)
         {
             string filePath = Path.Combine(directory, filename);
             
-            if (File.Exists(filePath))
+            if (method == "POST")
+            {
+                int contentLength = 0;
+                foreach (string line in lines)
+                {
+                    if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string lengthStr = line.Substring("Content-Length:".Length).Trim();
+                        contentLength = int.Parse(lengthStr);
+                        break;
+                    }
+                }
+                
+                int bodyStartIndex = request.IndexOf("\r\n\r\n") + 4;
+                string body = request.Substring(bodyStartIndex, contentLength);
+                
+                File.WriteAllText(filePath, body);
+                
+                response = "HTTP/1.1 201 Created\r\n\r\n";
+            }
+            // GET request for file
+            else if (File.Exists(filePath))
             {
                 byte[] fileContent = File.ReadAllBytes(filePath);
                 int contentLength = fileContent.Length;
@@ -92,9 +114,15 @@ void HandleClient(Socket client, string? directory)
                 client.Close();
                 return;
             }
+            else
+            {
+                response = "HTTP/1.1 404 Not Found\r\n\r\n";
+            }
         }
-        
-        response = "HTTP/1.1 404 Not Found\r\n\r\n";
+        else
+        {
+            response = "HTTP/1.1 404 Not Found\r\n\r\n";
+        }
     }
     else
     {
