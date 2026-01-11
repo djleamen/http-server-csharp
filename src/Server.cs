@@ -14,6 +14,11 @@ while (true)
 {
     Socket client = server.AcceptSocket();
     
+    _ = Task.Run(() => HandleClient(client));
+}
+
+void HandleClient(Socket client)
+{
     // Read the request
     byte[] buffer = new byte[1024];
     int bytesRead = client.Receive(buffer);
