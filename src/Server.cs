@@ -6,6 +6,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.IO.Compression;
 
 // Parse command line arguments
 string? directory = null;
@@ -60,16 +61,38 @@ void HandleClient(Socket client, string? directory)
     else if (path.StartsWith("/echo/"))
     {
         string echoStr = path.Substring(6);
-        int contentLength = Encoding.UTF8.GetByteCount(echoStr);
         
         bool supportsGzip = acceptEncoding.Contains("gzip", StringComparison.OrdinalIgnoreCase);
         
         if (supportsGzip)
         {
-            response = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: {contentLength}\r\n\r\n{echoStr}";
+            byte[] uncompressedBytes = Encoding.UTF8.GetBytes(echoStr);
+            byte[] compressedBytes;
+            
+            using (var memoryStream = new MemoryStream())
+            {
+                using (var gzipStream = new GZipStream(memoryStream, CompressionMode.Compress))
+                {
+                    gzipStream.Write(uncompressedBytes, 0, uncompressedBytes.Length);
+                }
+                compressedBytes = memoryStream.ToArray();
+            }
+            
+            int compressedLength = compressedBytes.Length;
+            string headers = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: {compressedLength}\r\n\r\n";
+            byte[] headerBytes = Encoding.UTF8.GetBytes(headers);
+            
+            byte[] fullResponse = new byte[headerBytes.Length + compressedBytes.Length];
+            Buffer.BlockCopy(headerBytes, 0, fullResponse, 0, headerBytes.Length);
+            Buffer.BlockCopy(compressedBytes, 0, fullResponse, headerBytes.Length, compressedBytes.Length);
+            
+            client.Send(fullResponse);
+            client.Close();
+            return;
         }
         else
         {
+            int contentLength = Encoding.UTF8.GetByteCount(echoStr);
             response = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {contentLength}\r\n\r\n{echoStr}";
         }
     }
