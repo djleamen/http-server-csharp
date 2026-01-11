@@ -67,11 +67,15 @@ void HandleClient(Socket client, string? directory)
             }
         }
         
+        // Determine if we should close the connection
+        bool shouldClose = connectionHeader.Equals("close", StringComparison.OrdinalIgnoreCase);
+        string connectionResponseHeader = shouldClose ? "Connection: close\r\n" : "";
+        
         // Send the HTTP response
         string response;
         if (path == "/")
         {
-            response = "HTTP/1.1 200 OK\r\n\r\n";
+            response = $"HTTP/1.1 200 OK\r\n{connectionResponseHeader}\r\n";
         }
         else if (path.StartsWith("/echo/"))
         {
@@ -94,7 +98,7 @@ void HandleClient(Socket client, string? directory)
                 }
                 
                 int compressedLength = compressedBytes.Length;
-                string headers = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: {compressedLength}\r\n\r\n";
+                string headers = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: {compressedLength}\r\n{connectionResponseHeader}\r\n";
                 byte[] headerBytes = Encoding.UTF8.GetBytes(headers);
                 
                 byte[] fullResponse = new byte[headerBytes.Length + compressedBytes.Length];
@@ -104,7 +108,7 @@ void HandleClient(Socket client, string? directory)
                 client.Send(fullResponse);
                 
                 // Close connection if requested
-                if (connectionHeader.Equals("close", StringComparison.OrdinalIgnoreCase))
+                if (shouldClose)
                 {
                     break;
                 }
@@ -113,7 +117,7 @@ void HandleClient(Socket client, string? directory)
             else
             {
                 int contentLength = Encoding.UTF8.GetByteCount(echoStr);
-                response = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {contentLength}\r\n\r\n{echoStr}";
+                response = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {contentLength}\r\n{connectionResponseHeader}\r\n{echoStr}";
             }
         }
         else if (path == "/user-agent")
@@ -129,7 +133,7 @@ void HandleClient(Socket client, string? directory)
             }
             
             int contentLength = Encoding.UTF8.GetByteCount(userAgent);
-            response = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {contentLength}\r\n\r\n{userAgent}";
+            response = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {contentLength}\r\n{connectionResponseHeader}\r\n{userAgent}";
         }
         else if (path.StartsWith("/files/"))
         {
@@ -157,7 +161,7 @@ void HandleClient(Socket client, string? directory)
                     
                     File.WriteAllText(filePath, body);
                     
-                    response = "HTTP/1.1 201 Created\r\n\r\n";
+                    response = $"HTTP/1.1 201 Created\r\n{connectionResponseHeader}\r\n";
                 }
                 // GET request for file
                 else if (File.Exists(filePath))
@@ -165,7 +169,7 @@ void HandleClient(Socket client, string? directory)
                     byte[] fileContent = File.ReadAllBytes(filePath);
                     int contentLength = fileContent.Length;
                     
-                    string headers = $"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {contentLength}\r\n\r\n";
+                    string headers = $"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {contentLength}\r\n{connectionResponseHeader}\r\n";
                     byte[] headerBytes = Encoding.UTF8.GetBytes(headers);
                     
                     byte[] fullResponse = new byte[headerBytes.Length + fileContent.Length];
@@ -175,7 +179,7 @@ void HandleClient(Socket client, string? directory)
                     client.Send(fullResponse);
                     
                     // Close connection if requested
-                    if (connectionHeader.Equals("close", StringComparison.OrdinalIgnoreCase))
+                    if (shouldClose)
                     {
                         break;
                     }
@@ -183,23 +187,23 @@ void HandleClient(Socket client, string? directory)
                 }
                 else
                 {
-                    response = "HTTP/1.1 404 Not Found\r\n\r\n";
+                    response = $"HTTP/1.1 404 Not Found\r\n{connectionResponseHeader}\r\n";
                 }
             }
             else
             {
-                response = "HTTP/1.1 404 Not Found\r\n\r\n";
+                response = $"HTTP/1.1 404 Not Found\r\n{connectionResponseHeader}\r\n";
             }
         }
         else
         {
-            response = "HTTP/1.1 404 Not Found\r\n\r\n";
+            response = $"HTTP/1.1 404 Not Found\r\n{connectionResponseHeader}\r\n";
         }
         
         byte[] responseBytes = Encoding.UTF8.GetBytes(response);
         client.Send(responseBytes);
         
-        if (connectionHeader.Equals("close", StringComparison.OrdinalIgnoreCase))
+        if (shouldClose)
         {
             break;
         }
