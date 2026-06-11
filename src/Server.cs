@@ -35,7 +35,13 @@ void HandleClient(Socket client, string? directory)
     {
         ServeConnection(client, directory);
     }
-    catch (Exception)
+    catch (Exception ex) when (
+        ex is SocketException
+        or IOException
+        or IndexOutOfRangeException
+        or ArgumentOutOfRangeException
+        or FormatException
+        or OverflowException)
     {
         // Malformed request or abrupt client disconnect; drop the connection
     }
@@ -173,10 +179,10 @@ void ServeConnection(Socket client, string? directory)
                         }
                     }
                     
-                    int bodyStartIndex = request.IndexOf("\r\n\r\n") + 4;
+                    int headerEnd = request.IndexOf("\r\n\r\n");
 
                     // Keep reading until the full body (per Content-Length) has arrived
-                    while (request.Length - bodyStartIndex < contentLength)
+                    while (headerEnd != -1 && request.Length - (headerEnd + 4) < contentLength)
                     {
                         int moreBytes = client.Receive(buffer);
                         if (moreBytes == 0)
@@ -186,11 +192,20 @@ void ServeConnection(Socket client, string? directory)
                         request += Encoding.UTF8.GetString(buffer, 0, moreBytes);
                     }
 
-                    string body = request.Substring(bodyStartIndex, contentLength);
-                    
-                    File.WriteAllText(filePath, body);
-                    
-                    response = $"HTTP/1.1 201 Created\r\n{connectionResponseHeader}\r\n";
+                    // Guard against truncated requests (missing header terminator
+                    // or client disconnect before the declared body arrived)
+                    if (headerEnd == -1 || request.Length - (headerEnd + 4) < contentLength)
+                    {
+                        response = $"HTTP/1.1 400 Bad Request\r\n{connectionResponseHeader}\r\n";
+                    }
+                    else
+                    {
+                        string body = request.Substring(headerEnd + 4, contentLength);
+
+                        File.WriteAllText(filePath, body);
+
+                        response = $"HTTP/1.1 201 Created\r\n{connectionResponseHeader}\r\n";
+                    }
                 }
                 // GET request for file
                 else if (File.Exists(filePath))
