@@ -31,8 +31,31 @@ while (true)
 
 void HandleClient(Socket client, string? directory)
 {
+    try
+    {
+        ServeConnection(client, directory);
+    }
+    catch (Exception ex) when (
+        ex is SocketException
+        or IOException
+        or IndexOutOfRangeException
+        or ArgumentOutOfRangeException
+        or FormatException
+        or OverflowException)
+    {
+        // Malformed request or abrupt client disconnect; drop the connection
+    }
+    finally
+    {
+        // Close the connection
+        client.Close();
+    }
+}
+
+void ServeConnection(Socket client, string? directory)
+{
     byte[] buffer = new byte[1024];
-    
+
     while (true)
     {
         // Read the request
@@ -156,12 +179,33 @@ void HandleClient(Socket client, string? directory)
                         }
                     }
                     
-                    int bodyStartIndex = request.IndexOf("\r\n\r\n") + 4;
-                    string body = request.Substring(bodyStartIndex, contentLength);
-                    
-                    File.WriteAllText(filePath, body);
-                    
-                    response = $"HTTP/1.1 201 Created\r\n{connectionResponseHeader}\r\n";
+                    int headerEnd = request.IndexOf("\r\n\r\n");
+
+                    // Keep reading until the full body (per Content-Length) has arrived
+                    while (headerEnd != -1 && request.Length - (headerEnd + 4) < contentLength)
+                    {
+                        int moreBytes = client.Receive(buffer);
+                        if (moreBytes == 0)
+                        {
+                            break;
+                        }
+                        request += Encoding.UTF8.GetString(buffer, 0, moreBytes);
+                    }
+
+                    // Guard against truncated requests (missing header terminator
+                    // or client disconnect before the declared body arrived)
+                    if (headerEnd == -1 || request.Length - (headerEnd + 4) < contentLength)
+                    {
+                        response = $"HTTP/1.1 400 Bad Request\r\n{connectionResponseHeader}\r\n";
+                    }
+                    else
+                    {
+                        string body = request.Substring(headerEnd + 4, contentLength);
+
+                        File.WriteAllText(filePath, body);
+
+                        response = $"HTTP/1.1 201 Created\r\n{connectionResponseHeader}\r\n";
+                    }
                 }
                 // GET request for file
                 else if (File.Exists(filePath))
@@ -208,7 +252,4 @@ void HandleClient(Socket client, string? directory)
             break;
         }
     }
-    
-    // Close the connection
-    client.Close();
 }
