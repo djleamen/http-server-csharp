@@ -31,8 +31,25 @@ while (true)
 
 void HandleClient(Socket client, string? directory)
 {
+    try
+    {
+        ServeConnection(client, directory);
+    }
+    catch (Exception)
+    {
+        // Malformed request or abrupt client disconnect; drop the connection
+    }
+    finally
+    {
+        // Close the connection
+        client.Close();
+    }
+}
+
+void ServeConnection(Socket client, string? directory)
+{
     byte[] buffer = new byte[1024];
-    
+
     while (true)
     {
         // Read the request
@@ -157,6 +174,18 @@ void HandleClient(Socket client, string? directory)
                     }
                     
                     int bodyStartIndex = request.IndexOf("\r\n\r\n") + 4;
+
+                    // Keep reading until the full body (per Content-Length) has arrived
+                    while (request.Length - bodyStartIndex < contentLength)
+                    {
+                        int moreBytes = client.Receive(buffer);
+                        if (moreBytes == 0)
+                        {
+                            break;
+                        }
+                        request += Encoding.UTF8.GetString(buffer, 0, moreBytes);
+                    }
+
                     string body = request.Substring(bodyStartIndex, contentLength);
                     
                     File.WriteAllText(filePath, body);
@@ -208,7 +237,4 @@ void HandleClient(Socket client, string? directory)
             break;
         }
     }
-    
-    // Close the connection
-    client.Close();
 }
